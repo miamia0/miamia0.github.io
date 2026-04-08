@@ -59,15 +59,26 @@ Flash Attention 的优化思路是将这三个算子融合在一起，减少中�
  
 这样计算仍然有两次循环，不过因为 softmax 之后是 dot product，所以单行的结果最终需要做聚合，所以可以做进一步的公式推导。
 
-$$
+\[
 \begin{aligned}
-\mathbf{o}_i' &= \sum_{j=1}^i \frac{e^{x_j - m_i}}{d_i'} V[j,:] \\
-&= \left( \sum_{j=1}^{i-1} \frac{e^{x_j - m_i}}{d_i'} V[j,:] \right) + \frac{e^{x_i - m_i}}{d_i'} V[i,:] \\
-&= \left( \sum_{j=1}^{i-1} \frac{e^{x_j - m_{i-1}}}{d_{i-1}'} \frac{e^{x_j - m_i}}{e^{x_j - m_{i-1}}} \frac{d_{i-1}'}{d_i'} V[j,:] \right) + \frac{e^{x_i - m_i}}{d_i'} V[i,:] \\
-&= \left( \sum_{j=1}^{i-1} \frac{e^{x_j - m_{i-1}}}{d_{i-1}'} V[j,:] \right) \frac{d_{i-1}'}{d_i'} e^{m_{i-1} - m_i} + \frac{e^{x_i - m_i}}{d_i'} V[i,:] \\
-&= \mathbf{o}_{i-1}' \frac{d_{i-1}' e^{m_{i-1} - m_i}}{d_i'} + \frac{e^{x_i - m_i}}{d_i'} V[i,:] 
+\mathbf{o}_i'
+&= \sum_{j=1}^i \frac{e^{x_j - m_i}}{d_i'} V[j,:] \\
+&= \left( \sum_{j=1}^{i-1} \frac{e^{x_j - m_i}}{d_i'} V[j,:] \right)
++ \frac{e^{x_i - m_i}}{d_i'} V[i,:] \\
+&= \left( \sum_{j=1}^{i-1}
+\frac{e^{x_j - m_{i-1}}}{d_{i-1}'}
+\frac{e^{x_j - m_i}}{e^{x_j - m_{i-1}}}
+\frac{d_{i-1}'}{d_i'} V[j,:] \right)
++ \frac{e^{x_i - m_i}}{d_i'} V[i,:] \\
+&= \left( \sum_{j=1}^{i-1}
+\frac{e^{x_j - m_{i-1}}}{d_{i-1}'} V[j,:] \right)
+\frac{d_{i-1}'}{d_i'} e^{m_{i-1} - m_i}
++ \frac{e^{x_i - m_i}}{d_i'} V[i,:] \\
+&= \mathbf{o}_{i-1}'
+\frac{d_{i-1}' e^{m_{i-1} - m_i}}{d_i'}
++ \frac{e^{x_i - m_i}}{d_i'} V[i,:]
 \end{aligned}
-$$
+\]
 
 从这个公式可以看出，计算第 i 行的结果只需要第 i-1 行的结果，所以可以用迭代的方式计算得到 dot product 的结果。
 
